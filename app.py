@@ -1,10 +1,9 @@
 from flask import Flask, render_template, request, jsonify
 from flask_cors import CORS
 import requests, time, re, traceback
-import undetected_chromedriver as uc
+from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.action_chains import ActionChains
-import undetected_chromedriver as uc
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
 
@@ -45,7 +44,7 @@ def fetch_anime_details(anime_id: int):
     data = response.json()
     return data.get("data", {}).get("Media", None)
 
-
+# --------- SELENIUM CHROME DRIVER SETUP ---------
 def initialize_driver():
     options = Options()
     options.add_argument("--headless=new")
@@ -54,15 +53,12 @@ def initialize_driver():
     options.add_argument("--disable-gpu")
     options.add_argument("--window-size=1920,1080")
 
-    # 👉 Use your system-installed ChromeDriver
-    chrome_driver_path = "chromedriver"  # change this if different in your environment
-
-    service = Service(chrome_driver_path)
-    driver = uc.Chrome(service=service, options=options, use_subprocess=True)
-
+    # Adjust path to chromedriver if needed (must exist in your environment)
+    service = Service("chromedriver")
+    driver = webdriver.Chrome(service=service, options=options)
     return driver
 
-
+# --------- VIDEO EXTRACTION ---------
 def press_until_video_loaded(driver, max_presses=25):
     actions = ActionChains(driver)
     body = driver.find_element(By.TAG_NAME, "body")
@@ -134,5 +130,4 @@ def watch_episode(anime_id, episode):
 
 # --------- MAIN ---------
 if __name__ == "__main__":
-    # Run like a normal Flask app, no uvicorn needed
     app.run(host="0.0.0.0", port=8000, debug=True)
