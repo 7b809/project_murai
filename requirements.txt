@@ -1,6 +1,8 @@
-fastapi
-uvicorn
-jinja2
+Flask
+Flask-Cors
+Jinja2
 selenium
 undetected-chromedriver
-flask_cors
+setuptools
+requests
+fastapi
