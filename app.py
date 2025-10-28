@@ -55,6 +55,8 @@ def initialize_driver():
 
     # Adjust path to chromedriver if needed (must exist in your environment)
     service = Service("chromedriver")
+    # service = Service(r"chromedriver.exe")
+
     driver = webdriver.Chrome(service=service, options=options)
     return driver
 
