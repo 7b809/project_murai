@@ -4,6 +4,9 @@ import requests, time, re, traceback
 import undetected_chromedriver as uc
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.action_chains import ActionChains
+import undetected_chromedriver as uc
+from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.chrome.options import Options
 
 # --------- FLASK SETUP ---------
 app = Flask(__name__, template_folder="templates")
@@ -42,23 +45,23 @@ def fetch_anime_details(anime_id: int):
     data = response.json()
     return data.get("data", {}).get("Media", None)
 
-# --------- VIDEO EXTRACTION ---------
+
 def initialize_driver():
-    options = uc.ChromeOptions()
+    options = Options()
     options.add_argument("--headless=new")
-    options.add_argument("--incognito")
-    options.add_argument("--disable-gpu")
-    options.add_argument("--window-size=1920,1080")
-    options.add_argument("--disable-blink-features=AutomationControlled")
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
-    options.add_argument(
-        "user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-        "AppleWebKit/537.36 (KHTML, like Gecko) "
-        "Chrome/121.0.0.0 Safari/537.36"
-    )
-    driver = uc.Chrome(options=options, use_subprocess=True)
+    options.add_argument("--disable-gpu")
+    options.add_argument("--window-size=1920,1080")
+
+    # 👉 Use your system-installed ChromeDriver
+    chrome_driver_path = "chromedriver"  # change this if different in your environment
+
+    service = Service(chrome_driver_path)
+    driver = uc.Chrome(service=service, options=options, use_subprocess=True)
+
     return driver
+
 
 def press_until_video_loaded(driver, max_presses=25):
     actions = ActionChains(driver)
