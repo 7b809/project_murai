@@ -12,9 +12,14 @@ from selenium.webdriver.chrome.options import Options
 
 # --------- FLASK SETUP ---------
 app = Flask(__name__)
+CORS(app, supports_credentials=True, resources={r"/*": {"origins": "*"}})
 
-# ✅ Allow frontend origin (127.0.0.1:5500 and trycloudflare)
-CORS(app, resources={r"/*": {"origins": ["*", "http://127.0.0.1:5500", "https://hearings-ireland-desirable-stephen.trycloudflare.com"]}})
+@app.after_request
+def after_request(response):
+    response.headers.add("Access-Control-Allow-Origin", "*")
+    response.headers.add("Access-Control-Allow-Headers", "Content-Type,Authorization")
+    response.headers.add("Access-Control-Allow-Methods", "GET,POST,OPTIONS")
+    return response
 
 # --------- GRAPHQL: AniList Fetch ---------
 ANILIST_URL = "https://graphql.anilist.co"
