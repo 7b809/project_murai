@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, request, jsonify
 from flask_cors import CORS
 import requests, time, re, traceback
 from selenium import webdriver
@@ -8,8 +8,8 @@ from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
 
 # --------- FLASK SETUP ---------
-app = Flask(__name__, template_folder="templates")
-CORS(app)  # Enable Cross-Origin Resource Sharing
+app = Flask(__name__)
+CORS(app)
 
 # --------- GRAPHQL: AniList Fetch ---------
 ANILIST_URL = "https://graphql.anilist.co"
@@ -46,6 +46,7 @@ def fetch_anime_details(anime_id: int):
 
 # --------- SELENIUM CHROME DRIVER SETUP ---------
 def initialize_driver():
+    """Initialize a headless Chrome WebDriver"""
     options = Options()
     options.add_argument("--headless=new")
     options.add_argument("--no-sandbox")
@@ -53,15 +54,13 @@ def initialize_driver():
     options.add_argument("--disable-gpu")
     options.add_argument("--window-size=1920,1080")
 
-    # Adjust path to chromedriver if needed (must exist in your environment)
     service = Service("chromedriver")
-    # service = Service(r"chromedriver.exe")
-
     driver = webdriver.Chrome(service=service, options=options)
     return driver
 
 # --------- VIDEO EXTRACTION ---------
 def press_until_video_loaded(driver, max_presses=25):
+    """Try pressing 'K' repeatedly until a video URL is found in the page HTML"""
     actions = ActionChains(driver)
     body = driver.find_element(By.TAG_NAME, "body")
     pattern_m3u8 = re.compile(r'https?://[^\s"]+\.m3u8')
@@ -83,31 +82,36 @@ def press_until_video_loaded(driver, max_presses=25):
             }
     return None
 
-# --------- ROUTES ---------
-@app.route("/", methods=["GET"])
-def home():
-    """Homepage: ask for anime ID to fetch details."""
-    return render_template("index.html")
+# --------- ROUTES (API ONLY) ---------
+@app.route("/")
+def root():
+    return jsonify({
+        "status": "ok",
+        "message": "Anime API Backend is running",
+        "routes": ["/anime?id=<anime_id>", "/watch/<anime_id>/<episode>"]
+    })
 
-@app.route("/anime", methods=["POST"])
+@app.route("/anime", methods=["GET"])
 def get_anime():
-    """Fetch anime data and show episodes as cards."""
-    anime_id = request.form.get("anime_id")
+    """Fetch anime details by ID and return as JSON."""
+    anime_id = request.args.get("id")
     if not anime_id:
-        return render_template("index.html", error="Please enter a valid Anime ID")
+        return jsonify({"status": "error", "message": "Missing 'id' parameter"}), 400
 
-    anime = fetch_anime_details(int(anime_id))
-    if not anime:
-        return render_template("index.html", error="Anime not found")
+    try:
+        anime = fetch_anime_details(int(anime_id))
+        if not anime:
+            return jsonify({"status": "error", "message": "Anime not found"}), 404
 
-    total_eps = anime.get("episodes", 0) or 12
-    episodes = list(range(1, total_eps + 1))
-
-    return render_template("index.html", anime=anime, episodes=episodes)
+        anime["episodesList"] = list(range(1, (anime.get("episodes", 0) or 12) + 1))
+        return jsonify({"status": "ok", "anime": anime})
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({"status": "error", "message": str(e)}), 500
 
 @app.route("/watch/<int:anime_id>/<int:episode>", methods=["GET"])
 def watch_episode(anime_id, episode):
-    """Fetch episode streaming link and return as JSON (used by frontend JS)."""
+    """Fetch streaming video URL for a specific anime episode."""
     target_url = f"https://www.miruro.to/watch?id={anime_id}&ep={episode}"
     print(f"[INFO] Fetching video for Anime {anime_id}, Episode {episode}")
 
@@ -121,14 +125,14 @@ def watch_episode(anime_id, episode):
         if result and (result.get("mp4") or result.get("m3u8")):
             video_url = result.get("mp4") or result.get("m3u8")
             print(f"[SUCCESS] Found video: {video_url}")
-            return jsonify({"status": "ok", "watch_url": video_url})
+            return jsonify({"status": "ok", "anime_id": anime_id, "episode": episode, "video_url": video_url})
         else:
             print("[FAIL] No video found.")
-            return jsonify({"status": "error", "message": "No video found."})
+            return jsonify({"status": "error", "message": "No video found."}), 404
     except Exception as e:
         traceback.print_exc()
         driver.quit()
-        return jsonify({"status": "error", "message": str(e)})
+        return jsonify({"status": "error", "message": str(e)}), 500
 
 # --------- MAIN ---------
 if __name__ == "__main__":
