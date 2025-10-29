@@ -54,7 +54,7 @@ def initialize_driver():
     options.add_argument("--window-size=1920,1080")
 
     # Adjust path to chromedriver if needed (must exist in your environment)
-    service = Service("chromedriver")
+    service = Service("./chromedriver")
     # service = Service(r"chromedriver.exe")
 
     driver = webdriver.Chrome(service=service, options=options)
