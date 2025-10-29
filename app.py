@@ -1,6 +1,6 @@
 from flask import Flask, render_template, request, jsonify
 from flask_cors import CORS
-import requests, time, re, traceback
+import requests, time, re, traceback, os, zipfile, subprocess
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.action_chains import ActionChains
@@ -44,8 +44,42 @@ def fetch_anime_details(anime_id: int):
     data = response.json()
     return data.get("data", {}).get("Media", None)
 
+
 # --------- SELENIUM CHROME DRIVER SETUP ---------
 def initialize_driver():
+    """Initialize Selenium ChromeDriver, auto-download if not found."""
+    driver_path = "./chromedriver"
+
+    # If chromedriver not found, download and extract it automatically
+    if not os.path.exists(driver_path):
+        print("[INFO] chromedriver not found. Downloading...")
+        url = "https://storage.googleapis.com/chrome-for-testing-public/129.0.6668.90/linux64/chromedriver-linux64.zip"
+        zip_path = "chromedriver-linux64.zip"
+
+        # Download ZIP file
+        r = requests.get(url, stream=True)
+        if r.status_code != 200:
+            raise Exception(f"Failed to download chromedriver: HTTP {r.status_code}")
+        with open(zip_path, "wb") as f:
+            for chunk in r.iter_content(chunk_size=8192):
+                f.write(chunk)
+
+        # Extract the ZIP
+        print("[INFO] Extracting chromedriver...")
+        with zipfile.ZipFile(zip_path, "r") as zip_ref:
+            zip_ref.extractall(".")
+
+        # Move the executable and clean up
+        extracted_driver = "chromedriver-linux64/chromedriver"
+        if os.path.exists(extracted_driver):
+            os.replace(extracted_driver, driver_path)
+        os.chmod(driver_path, 0o755)
+
+        subprocess.run(["rm", "-rf", "chromedriver-linux64"], check=False)
+        os.remove(zip_path)
+        print("[INFO] chromedriver downloaded and ready.")
+
+    # Setup Chrome options
     options = Options()
     options.add_argument("--headless=new")
     options.add_argument("--no-sandbox")
@@ -53,12 +87,10 @@ def initialize_driver():
     options.add_argument("--disable-gpu")
     options.add_argument("--window-size=1920,1080")
 
-    # Adjust path to chromedriver if needed (must exist in your environment)
-    service = Service("./chromedriver")
-    # service = Service(r"chromedriver.exe")
-
+    service = Service(driver_path)
     driver = webdriver.Chrome(service=service, options=options)
     return driver
+
 
 # --------- VIDEO EXTRACTION ---------
 def press_until_video_loaded(driver, max_presses=25):
@@ -83,11 +115,13 @@ def press_until_video_loaded(driver, max_presses=25):
             }
     return None
 
+
 # --------- ROUTES ---------
 @app.route("/", methods=["GET"])
 def home():
     """Homepage: ask for anime ID to fetch details."""
     return render_template("index.html")
+
 
 @app.route("/anime", methods=["POST"])
 def get_anime():
@@ -104,6 +138,7 @@ def get_anime():
     episodes = list(range(1, total_eps + 1))
 
     return render_template("index.html", anime=anime, episodes=episodes)
+
 
 @app.route("/watch/<int:anime_id>/<int:episode>", methods=["GET"])
 def watch_episode(anime_id, episode):
@@ -130,6 +165,8 @@ def watch_episode(anime_id, episode):
         driver.quit()
         return jsonify({"status": "error", "message": str(e)})
 
+
 # --------- MAIN ---------
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8000, debug=True)
+    
