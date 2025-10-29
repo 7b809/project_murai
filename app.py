@@ -1,3 +1,6 @@
+
+# --------- FLASK SETUP ---------
+app = Flask(__name__)
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import requests, time, re, traceback
@@ -9,7 +12,9 @@ from selenium.webdriver.chrome.options import Options
 
 # --------- FLASK SETUP ---------
 app = Flask(__name__)
-CORS(app)
+
+# ✅ Allow frontend origin (127.0.0.1:5500 and trycloudflare)
+CORS(app, resources={r"/*": {"origins": ["*", "http://127.0.0.1:5500", "https://hearings-ireland-desirable-stephen.trycloudflare.com"]}})
 
 # --------- GRAPHQL: AniList Fetch ---------
 ANILIST_URL = "https://graphql.anilist.co"
