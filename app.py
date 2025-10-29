@@ -1,6 +1,6 @@
 from flask import Flask, render_template, request, jsonify
 from flask_cors import CORS
-import requests, time, re, traceback, os, zipfile, subprocess
+import requests, time, re, traceback
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.action_chains import ActionChains
@@ -9,7 +9,7 @@ from selenium.webdriver.chrome.options import Options
 
 # --------- FLASK SETUP ---------
 app = Flask(__name__, template_folder="templates")
-CORS(app)
+CORS(app)  # Enable Cross-Origin Resource Sharing
 
 # --------- GRAPHQL: AniList Fetch ---------
 ANILIST_URL = "https://graphql.anilist.co"
@@ -44,62 +44,21 @@ def fetch_anime_details(anime_id: int):
     data = response.json()
     return data.get("data", {}).get("Media", None)
 
-
-# --------- CHROMEDRIVER + CHROME AUTO SETUP ---------
+# --------- SELENIUM CHROME DRIVER SETUP ---------
 def initialize_driver():
-    """Initialize Selenium ChromeDriver, auto-download Chrome + driver if not found."""
-    driver_path = "./chromedriver"
-    chrome_path = "/usr/bin/google-chrome"
-
-    # ---- 1️⃣ Install Google Chrome if missing ----
-    if not os.path.exists(chrome_path):
-        print("[INFO] Google Chrome not found. Installing...")
-        subprocess.run([
-            "bash", "-c",
-            "apt-get update && apt-get install -y wget gnupg unzip && "
-            "wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | apt-key add - && "
-            "echo 'deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main' > /etc/apt/sources.list.d/google-chrome.list && "
-            "apt-get update && apt-get install -y google-chrome-stable"
-        ], check=False)
-        print("[INFO] Google Chrome installation complete.")
-
-    # ---- 2️⃣ Download chromedriver if missing ----
-    if not os.path.exists(driver_path):
-        print("[INFO] chromedriver not found. Downloading...")
-        url = "https://storage.googleapis.com/chrome-for-testing-public/129.0.6668.90/linux64/chromedriver-linux64.zip"
-        zip_path = "chromedriver-linux64.zip"
-
-        r = requests.get(url, stream=True)
-        if r.status_code != 200:
-            raise Exception(f"Failed to download chromedriver: HTTP {r.status_code}")
-
-        with open(zip_path, "wb") as f:
-            for chunk in r.iter_content(chunk_size=8192):
-                f.write(chunk)
-
-        print("[INFO] Extracting chromedriver...")
-        with zipfile.ZipFile(zip_path, "r") as zip_ref:
-            zip_ref.extractall(".")
-        if os.path.exists("chromedriver-linux64/chromedriver"):
-            os.replace("chromedriver-linux64/chromedriver", driver_path)
-        os.chmod(driver_path, 0o755)
-        subprocess.run(["rm", "-rf", "chromedriver-linux64"], check=False)
-        os.remove(zip_path)
-        print("[INFO] chromedriver ready.")
-
-    # ---- 3️⃣ Selenium setup ----
     options = Options()
-    options.binary_location = chrome_path
     options.add_argument("--headless=new")
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
     options.add_argument("--disable-gpu")
     options.add_argument("--window-size=1920,1080")
 
-    service = Service(driver_path)
+    # Adjust path to chromedriver if needed (must exist in your environment)
+    service = Service("chromedriver")
+    # service = Service(r"chromedriver.exe")
+
     driver = webdriver.Chrome(service=service, options=options)
     return driver
-
 
 # --------- VIDEO EXTRACTION ---------
 def press_until_video_loaded(driver, max_presses=25):
@@ -124,15 +83,15 @@ def press_until_video_loaded(driver, max_presses=25):
             }
     return None
 
-
 # --------- ROUTES ---------
 @app.route("/", methods=["GET"])
 def home():
+    """Homepage: ask for anime ID to fetch details."""
     return render_template("index.html")
-
 
 @app.route("/anime", methods=["POST"])
 def get_anime():
+    """Fetch anime data and show episodes as cards."""
     anime_id = request.form.get("anime_id")
     if not anime_id:
         return render_template("index.html", error="Please enter a valid Anime ID")
@@ -143,11 +102,12 @@ def get_anime():
 
     total_eps = anime.get("episodes", 0) or 12
     episodes = list(range(1, total_eps + 1))
-    return render_template("index.html", anime=anime, episodes=episodes)
 
+    return render_template("index.html", anime=anime, episodes=episodes)
 
 @app.route("/watch/<int:anime_id>/<int:episode>", methods=["GET"])
 def watch_episode(anime_id, episode):
+    """Fetch episode streaming link and return as JSON (used by frontend JS)."""
     target_url = f"https://www.miruro.to/watch?id={anime_id}&ep={episode}"
     print(f"[INFO] Fetching video for Anime {anime_id}, Episode {episode}")
 
@@ -169,7 +129,6 @@ def watch_episode(anime_id, episode):
         traceback.print_exc()
         driver.quit()
         return jsonify({"status": "error", "message": str(e)})
-
 
 # --------- MAIN ---------
 if __name__ == "__main__":
